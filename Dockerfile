@@ -27,6 +27,7 @@ ENV REPORTING_DATABASE__JOURNAL_PORT=5432
 ENV REPORTING_DATABASE__TIMESCALE_HOST=localhost
 ENV REPORTING_DATABASE__TIMESCALE_PORT=5432
 ENV REPORTING_LOG_LEVEL=INFO
+ENV REPORTING_DAEMON_INTERVAL=300
 
-# Default command - show stats
-CMD ["python", "-m", "reporting_service.runner", "stats"]
+# Default command - run analysis in daemon mode
+CMD ["python", "-m", "reporting_service.runner", "analyze", "--daemon"]

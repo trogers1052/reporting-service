@@ -6,7 +6,7 @@ import os
 from typing import Any, Dict, Optional
 
 import yaml
-from pydantic import Field
+from pydantic import Field, ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -79,9 +79,13 @@ class ReportingSettings(BaseSettings):
     # Logging
     log_level: str = Field(default="INFO")
 
-    class Config:
-        env_prefix = "REPORTING_"
-        env_nested_delimiter = "__"
+    # Daemon mode settings
+    daemon_interval: int = Field(default=300)  # 5 minutes
+
+    model_config = ConfigDict(
+        env_prefix="REPORTING_",
+        env_nested_delimiter="__",
+    )
 
     @classmethod
     def from_yaml(cls, yaml_path: str) -> "ReportingSettings":

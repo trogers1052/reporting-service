@@ -8,7 +8,9 @@ import argparse
 import json
 import logging
 import os
+import signal
 import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -51,6 +53,8 @@ class ReportingRunner:
         limit: Optional[int] = None,
         reanalyze_all: bool = False,
         since_days: Optional[int] = None,
+        daemon: bool = False,
+        interval_seconds: Optional[int] = None,
     ) -> int:
         """
         Run analysis on positions.
@@ -59,10 +63,25 @@ class ReportingRunner:
             limit: Maximum positions to analyze
             reanalyze_all: Re-analyze already analyzed positions
             since_days: Only analyze positions from last N days
+            daemon: Run continuously in daemon mode
+            interval_seconds: Seconds between analysis runs in daemon mode
 
         Returns:
             Number of positions analyzed
         """
+        if daemon:
+            interval = interval_seconds or self.settings.daemon_interval
+            return self._run_daemon(limit, interval)
+
+        return self._run_once(limit, reanalyze_all, since_days)
+
+    def _run_once(
+        self,
+        limit: Optional[int] = None,
+        reanalyze_all: bool = False,
+        since_days: Optional[int] = None,
+    ) -> int:
+        """Run analysis once."""
         since = None
         if since_days:
             since = datetime.utcnow() - timedelta(days=since_days)
@@ -86,6 +105,49 @@ class ReportingRunner:
             )
 
         return len(analyses)
+
+    def _run_daemon(
+        self,
+        limit: Optional[int] = None,
+        interval_seconds: int = 300,
+    ) -> int:
+        """Run analysis continuously in daemon mode."""
+        self._running = True
+        total_analyzed = 0
+
+        def handle_signal(signum, frame):
+            logger.info("Received shutdown signal")
+            self._running = False
+
+        signal.signal(signal.SIGTERM, handle_signal)
+        signal.signal(signal.SIGINT, handle_signal)
+
+        logger.info(
+            f"Starting daemon mode - analyzing every {interval_seconds} seconds"
+        )
+
+        while self._running:
+            try:
+                count = self._run_once(limit=limit, reanalyze_all=False)
+                total_analyzed += count
+
+                if count > 0:
+                    logger.info(f"Analyzed {count} new positions")
+                else:
+                    logger.debug("No new positions to analyze")
+
+                # Sleep in small intervals to respond to signals
+                for _ in range(interval_seconds):
+                    if not self._running:
+                        break
+                    time.sleep(1)
+
+            except Exception as e:
+                logger.error(f"Error in daemon loop: {e}")
+                time.sleep(30)  # Wait before retry
+
+        logger.info(f"Daemon stopped. Total analyzed: {total_analyzed}")
+        return total_analyzed
 
     def generate_report(
         self,
@@ -204,6 +266,18 @@ def main():
         type=int,
         help="Only analyze positions from last N days",
     )
+    analyze_parser.add_argument(
+        "--daemon",
+        "-d",
+        action="store_true",
+        help="Run continuously in daemon mode",
+    )
+    analyze_parser.add_argument(
+        "--interval",
+        type=int,
+        default=None,
+        help="Seconds between analysis runs in daemon mode (default: from config)",
+    )
 
     # Report command
     report_parser = subparsers.add_parser("report", help="Generate report")
@@ -252,6 +326,8 @@ def main():
                 limit=args.limit,
                 reanalyze_all=args.all,
                 since_days=args.since_days,
+                daemon=args.daemon,
+                interval_seconds=args.interval,
             )
             print(f"Analyzed {count} positions")
 
