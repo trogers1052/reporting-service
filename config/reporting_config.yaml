@@ -1,0 +1,42 @@
+# Reporting Service Configuration
+
+# Database connections
+database:
+  # Trading journal database
+  journal_host: "localhost"
+  journal_port: 5432
+  journal_db: "trading_journal"
+  journal_user: "postgres"
+  journal_password: ""
+
+  # TimescaleDB for historical market data
+  timescale_host: "localhost"
+  timescale_port: 5432
+  timescale_db: "market_data"
+  timescale_user: "postgres"
+  timescale_password: ""
+
+# Analysis settings
+analysis:
+  # Exit type detection
+  profit_target_threshold: 0.05    # 5% gain = profit target
+  stop_loss_threshold: -0.03       # 3% loss = stop loss
+
+  # Position sizing
+  position_size_tolerance: 0.20    # 20% deviation acceptable
+
+  # Indicator lookback
+  indicator_lookback_minutes: 60   # 1 hour before entry
+
+  # Signal confidence threshold
+  min_signal_confidence: 0.50
+
+# External service configs
+decision_engine_config: "/app/decision-engine/config/rules.yaml"
+risk_engine_config: "/app/risk-engine/config/risk_config.yaml"
+
+# Output
+report_output_dir: "./reports"
+
+# Logging
+log_level: "INFO"

@@ -1,0 +1,23 @@
+# Reporting Service Dependencies
+
+# Database
+psycopg2-binary>=2.9.0
+
+# Configuration
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+PyYAML>=6.0.0
+
+# Data handling
+pandas>=2.0.0
+numpy>=1.24.0,<2.0.0
+
+# Development & Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Optional: Decision engine integration
+# Install separately: pip install -e ../decision-engine
+
+# Optional: Risk engine integration
+# Install separately: pip install -e ../risk-engine
