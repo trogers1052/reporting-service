@@ -85,27 +85,27 @@ class Position:
             entry_date=row["entry_date"],
             status=row["status"],
             exit_order_id=row.get("exit_order_id"),
-            exit_price=float(row["exit_price"]) if row.get("exit_price") else None,
+            exit_price=float(row["exit_price"]) if row.get("exit_price") is not None else None,
             exit_date=row.get("exit_date"),
-            realized_pl=float(row["realized_pl"]) if row.get("realized_pl") else None,
+            realized_pl=float(row["realized_pl"]) if row.get("realized_pl") is not None else None,
             realized_pl_pct=(
-                float(row["realized_pl_pct"]) if row.get("realized_pl_pct") else None
+                float(row["realized_pl_pct"]) if row.get("realized_pl_pct") is not None else None
             ),
             holding_days=row.get("holding_days"),
             rule_compliance_score=(
                 float(row["rule_compliance_score"])
-                if row.get("rule_compliance_score")
+                if row.get("rule_compliance_score") is not None
                 else None
             ),
             entry_signal_confidence=(
                 float(row["entry_signal_confidence"])
-                if row.get("entry_signal_confidence")
+                if row.get("entry_signal_confidence") is not None
                 else None
             ),
             entry_signal_type=row.get("entry_signal_type"),
             position_size_deviation=(
                 float(row["position_size_deviation"])
-                if row.get("position_size_deviation")
+                if row.get("position_size_deviation") is not None
                 else None
             ),
             exit_type=row.get("exit_type"),

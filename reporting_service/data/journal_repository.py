@@ -419,7 +419,7 @@ class JournalRepository:
                 )
                 stats["compliance_by_outcome"] = {
                     row["outcome"]: {
-                        "avg_compliance": float(row["avg_compliance"] or 0),
+                        "avg_compliance": float(row["avg_compliance"]) if row["avg_compliance"] is not None else 0.0,
                         "count": row["count"],
                     }
                     for row in cur.fetchall()
