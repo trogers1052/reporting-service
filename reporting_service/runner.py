@@ -36,6 +36,7 @@ class ReportingRunner:
         self.settings = load_settings(config_path)
         self.analyzer = TradeAnalyzer(self.settings)
         self.report_generator: Optional[ReportGenerator] = None
+        self._shutdown_called = False
 
     def initialize(self) -> bool:
         """Initialize the runner."""
@@ -230,8 +231,14 @@ class ReportingRunner:
         print()
 
     def shutdown(self) -> None:
-        """Clean up resources."""
-        self.analyzer.shutdown()
+        """Clean up resources.
+
+        Safe to call multiple times (idempotent).  Both the signal handler and
+        the ``finally`` block in ``main()`` may invoke this method.
+        """
+        if not self._shutdown_called:
+            self._shutdown_called = True
+            self.analyzer.shutdown()
 
 
 def main():
@@ -325,6 +332,19 @@ def main():
     if not runner.initialize():
         logger.error("Failed to initialize runner")
         sys.exit(1)
+
+    # Register top-level signal handlers so that SIGTERM (e.g. from Docker or
+    # systemd) triggers a clean shutdown with resource cleanup.  In daemon mode,
+    # _run_daemon installs its own handlers that set self._running = False for a
+    # graceful loop exit; the finally block below still runs afterwards.
+    def _handle_shutdown(signum, frame):
+        sig_name = signal.Signals(signum).name
+        logger.info(f"Received {sig_name}, shutting down reporting-service...")
+        runner.shutdown()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _handle_shutdown)
+    signal.signal(signal.SIGINT, _handle_shutdown)
 
     try:
         if args.command == "analyze":
