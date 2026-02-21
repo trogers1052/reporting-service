@@ -291,6 +291,12 @@ class DeviationAnalyzer:
         non_compliant_wins = 0
         non_compliant_losses = 0
 
+        # Batch-load all positions needed for win/loss tracking to avoid N+1 queries
+        position_ids = [a.position_id for a in analyses if a.position_id]
+        positions_by_id = {
+            p.id: p for p in self.journal_repo.get_positions_by_ids(position_ids)
+        }
+
         for analysis in analyses:
             compliance_scores.append(analysis.rule_compliance_score)
             entry_confidences.append(analysis.entry_signal_confidence)
@@ -325,7 +331,7 @@ class DeviationAnalyzer:
                 metrics.other_exits += 1
 
             # Win rate by compliance
-            position = self.journal_repo.get_position_by_id(analysis.position_id)
+            position = positions_by_id.get(analysis.position_id)
             if position:
                 is_compliant = analysis.rule_compliance_score >= 0.50
                 is_winner = position.is_winner
@@ -370,7 +376,7 @@ class DeviationAnalyzer:
         report.best_compliant = sorted_by_compliance[-5:][::-1]
 
         # Generate insights
-        report.common_issues = self._identify_common_issues(analyses, metrics)
+        report.common_issues = self._identify_common_issues(analyses, metrics, positions_by_id)
         report.recommendations = self._generate_recommendations(analyses, metrics)
 
         return report
@@ -379,6 +385,7 @@ class DeviationAnalyzer:
         self,
         analyses: List[TradeAnalysis],
         metrics: ComplianceMetrics,
+        positions_by_id: Optional[Dict] = None,
     ) -> List[str]:
         """Identify common issues across trades."""
         issues = []
@@ -405,11 +412,11 @@ class DeviationAnalyzer:
 
         # Check for stop loss underuse
         stop_pct = metrics.stop_loss_exits / len(analyses) if analyses else 0
+        _pbi = positions_by_id or {}
         losing_trades = sum(
             1
             for a in analyses
-            if self.journal_repo.get_position_by_id(a.position_id)
-            and not self.journal_repo.get_position_by_id(a.position_id).is_winner
+            if _pbi.get(a.position_id) and not _pbi[a.position_id].is_winner
         )
         if losing_trades > 0 and stop_pct < 0.3:
             issues.append("Many losing trades without stop loss exits")

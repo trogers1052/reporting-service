@@ -65,12 +65,14 @@ class ReportingSettings(BaseSettings):
 
     # Decision engine rules config path (fallback if Redis unavailable)
     decision_engine_config: str = Field(
-        default="/Users/thomasrogers/Projects/decision-engine/config/rules.yaml"
+        default="/app/config/rules.yaml",
+        alias="DECISION_ENGINE_CONFIG_PATH",
     )
 
     # Risk engine config path
     risk_engine_config: Optional[str] = Field(
-        default="/Users/thomasrogers/Projects/risk-engine/config/risk_config.yaml"
+        default="/app/config/risk_config.yaml",
+        alias="RISK_ENGINE_CONFIG_PATH",
     )
 
     # Output settings

@@ -54,6 +54,12 @@ class JournalRepository:
         if not self._conn:
             return
 
+        ALLOWED_TYPES = {
+            "TEXT", "FLOAT", "INTEGER", "BOOLEAN", "TIMESTAMP",
+            "VARCHAR(255)", "VARCHAR(20)", "VARCHAR(50)", "JSONB",
+            "DECIMAL(10, 4)", "TIMESTAMP WITH TIME ZONE",
+        }
+
         columns = [
             ("rule_compliance_score", "DECIMAL(10, 4)"),
             ("entry_signal_confidence", "DECIMAL(10, 4)"),
@@ -68,11 +74,10 @@ class JournalRepository:
         try:
             with self._conn.cursor() as cur:
                 for col_name, col_type in columns:
+                    if col_type.upper() not in ALLOWED_TYPES:
+                        raise ValueError(f"Invalid column type: {col_type}")
                     cur.execute(
-                        f"""
-                        ALTER TABLE journal_positions
-                        ADD COLUMN IF NOT EXISTS {col_name} {col_type}
-                        """
+                        f'ALTER TABLE journal_positions ADD COLUMN IF NOT EXISTS "{col_name}" {col_type}'
                     )
             self._conn.commit()
             logger.info("Analysis columns ensured in journal_positions")
@@ -164,6 +169,29 @@ class JournalRepository:
         except psycopg2.Error as e:
             logger.error(f"Error fetching position {position_id}: {e}")
             return None
+
+    def get_positions_by_ids(self, position_ids: List[int]) -> List[Position]:
+        if not position_ids or not self._conn:
+            return []
+        placeholders = ",".join(["%s"] * len(position_ids))
+        query = f"""
+            SELECT id, symbol, entry_order_id, exit_order_id,
+                   entry_price, exit_price, quantity, entry_date, exit_date,
+                   realized_pl, realized_pl_pct, holding_days, status,
+                   rule_compliance_score, entry_signal_confidence,
+                   entry_signal_type, position_size_deviation, exit_type,
+                   analyzed_at, created_at
+            FROM journal_positions
+            WHERE id IN ({placeholders})
+        """
+        try:
+            with self._conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, list(position_ids))
+                rows = cur.fetchall()
+            return [Position.from_row(dict(row)) for row in rows]
+        except psycopg2.Error as e:
+            logger.error(f"Error fetching positions by ids: {e}")
+            return []
 
     def get_trades_for_position(self, position_id: int) -> List[Trade]:
         """Get all trades associated with a position."""

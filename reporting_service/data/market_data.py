@@ -261,20 +261,22 @@ class MarketDataLoader:
         if not self._conn:
             return None
 
-        query = """
+        lookback_days = int(lookback_days)  # ensure integer before interpolation
+        fetch_days = lookback_days * 2
+        query = f"""
             SELECT
                 time_bucket('1 day', time) AS date,
                 last(close, time) AS close
             FROM ohlcv_1min
             WHERE symbol = %s
-              AND time >= NOW() - interval '%s days'
+              AND time >= NOW() - INTERVAL '{fetch_days} days'
             GROUP BY date
             ORDER BY date
         """
 
         try:
             with self._conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(query, (symbol, lookback_days * 2))
+                cur.execute(query, (symbol,))
                 rows = cur.fetchall()
 
             if len(rows) < 2:
