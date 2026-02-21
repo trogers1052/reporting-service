@@ -46,6 +46,9 @@ class RulesClient:
                 db=self.settings.redis_db,
                 password=self.settings.redis_password if self.settings.redis_password else None,
                 decode_responses=True,
+                socket_connect_timeout=5,
+                socket_timeout=10,
+                retry_on_timeout=True,
             )
             self._redis.ping()
             logger.info(

@@ -236,6 +236,8 @@ class TradeAnalyzer:
 
     def shutdown(self) -> None:
         """Clean up connections."""
+        if self.deviation_analyzer:
+            self.deviation_analyzer.close()
         self.journal_repo.close()
         self.market_data.close()
         logger.info("Trade analyzer shut down")

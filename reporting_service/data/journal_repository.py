@@ -36,7 +36,10 @@ class JournalRepository:
                 dbname=db.journal_db,
                 user=db.journal_user,
                 password=db.journal_password,
+                connect_timeout=10,
+                options="-c statement_timeout=30000",
             )
+            self._conn.set_session(autocommit=False)
             logger.info(f"Connected to journal database at {db.journal_host}")
             return True
         except psycopg2.Error as e:
@@ -46,8 +49,24 @@ class JournalRepository:
     def close(self) -> None:
         """Close database connection."""
         if self._conn:
-            self._conn.close()
+            try:
+                self._conn.close()
+            except Exception:
+                pass
             self._conn = None
+
+    def _ensure_connected(self) -> bool:
+        """Check connection health and reconnect if needed."""
+        if self._conn is None:
+            return self.connect()
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return True
+        except psycopg2.Error:
+            logger.warning("Journal database connection lost, reconnecting")
+            self.close()
+            return self.connect()
 
     def ensure_analysis_columns(self) -> None:
         """Ensure the analysis columns exist in journal_positions."""
@@ -83,7 +102,12 @@ class JournalRepository:
             logger.info("Analysis columns ensured in journal_positions")
         except psycopg2.Error as e:
             logger.error(f"Error adding analysis columns: {e}")
-            self._conn.rollback()
+            try:
+                self._conn.rollback()
+            except psycopg2.Error:
+                pass
+
+    MAX_QUERY_LIMIT = 10000
 
     def get_closed_positions(
         self,
@@ -126,9 +150,9 @@ class JournalRepository:
 
         query += " ORDER BY exit_date DESC"
 
-        if limit:
-            query += " LIMIT %s"
-            params.append(limit)
+        effective_limit = min(limit, self.MAX_QUERY_LIMIT) if limit else self.MAX_QUERY_LIMIT
+        query += " LIMIT %s"
+        params.append(effective_limit)
 
         try:
             with self._conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -137,6 +161,9 @@ class JournalRepository:
 
             return [Position.from_row(dict(row)) for row in rows]
 
+        except psycopg2.OperationalError as e:
+            logger.error(f"Database connection error fetching positions: {e}")
+            raise
         except psycopg2.Error as e:
             logger.error(f"Error fetching positions: {e}")
             return []
@@ -332,9 +359,15 @@ class JournalRepository:
             logger.debug(f"Updated analysis for position {position_id}")
             return True
 
+        except psycopg2.OperationalError as e:
+            logger.error(f"Database connection error updating position {position_id}: {e}")
+            raise
         except psycopg2.Error as e:
             logger.error(f"Error updating position {position_id}: {e}")
-            self._conn.rollback()
+            try:
+                self._conn.rollback()
+            except psycopg2.Error:
+                pass
             return False
 
     def get_analysis_stats(self) -> Dict:

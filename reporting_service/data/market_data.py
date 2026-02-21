@@ -34,7 +34,10 @@ class MarketDataLoader:
                 dbname=db.timescale_db,
                 user=db.timescale_user,
                 password=db.timescale_password,
+                connect_timeout=10,
+                options="-c statement_timeout=60000",
             )
+            self._conn.set_session(autocommit=False)
             logger.info(f"Connected to TimescaleDB at {db.timescale_host}")
             return True
         except psycopg2.Error as e:
@@ -44,8 +47,24 @@ class MarketDataLoader:
     def close(self) -> None:
         """Close database connection."""
         if self._conn:
-            self._conn.close()
+            try:
+                self._conn.close()
+            except Exception:
+                pass
             self._conn = None
+
+    def _ensure_connected(self) -> bool:
+        """Check connection health and reconnect if needed."""
+        if self._conn is None:
+            return self.connect()
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return True
+        except psycopg2.Error:
+            logger.warning("TimescaleDB connection lost, reconnecting")
+            self.close()
+            return self.connect()
 
     def get_indicators_at_time(
         self,
@@ -261,22 +280,22 @@ class MarketDataLoader:
         if not self._conn:
             return None
 
-        lookback_days = int(lookback_days)  # ensure integer before interpolation
+        lookback_days = int(lookback_days)
         fetch_days = lookback_days * 2
-        query = f"""
+        query = """
             SELECT
                 time_bucket('1 day', time) AS date,
                 last(close, time) AS close
             FROM ohlcv_1min
             WHERE symbol = %s
-              AND time >= NOW() - INTERVAL '{fetch_days} days'
+              AND time >= NOW() - make_interval(days => %s)
             GROUP BY date
             ORDER BY date
         """
 
         try:
             with self._conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(query, (symbol,))
+                cur.execute(query, (symbol, fetch_days))
                 rows = cur.fetchall()
 
             if len(rows) < 2:

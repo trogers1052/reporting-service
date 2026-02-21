@@ -128,6 +128,12 @@ class ReportingRunner:
 
         while self._running:
             try:
+                if not self.analyzer.journal_repo._ensure_connected():
+                    logger.error("Failed to reconnect to journal database")
+                    time.sleep(30)
+                    continue
+                self.analyzer.market_data._ensure_connected()
+
                 count = self._run_once(limit=limit, reanalyze_all=False)
                 total_analyzed += count
 
