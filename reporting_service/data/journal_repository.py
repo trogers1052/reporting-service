@@ -135,6 +135,7 @@ class JournalRepository:
                    realized_pl, realized_pl_pct, holding_days, status,
                    rule_compliance_score, entry_signal_confidence,
                    entry_signal_type, position_size_deviation, exit_type,
+                   risk_metrics_at_entry,
                    analyzed_at, created_at
             FROM journal_positions
             WHERE status = 'closed'
@@ -179,6 +180,7 @@ class JournalRepository:
                    realized_pl, realized_pl_pct, holding_days, status,
                    rule_compliance_score, entry_signal_confidence,
                    entry_signal_type, position_size_deviation, exit_type,
+                   risk_metrics_at_entry,
                    analyzed_at, created_at
             FROM journal_positions
             WHERE id = %s
@@ -207,6 +209,7 @@ class JournalRepository:
                    realized_pl, realized_pl_pct, holding_days, status,
                    rule_compliance_score, entry_signal_confidence,
                    entry_signal_type, position_size_deviation, exit_type,
+                   risk_metrics_at_entry,
                    analyzed_at, created_at
             FROM journal_positions
             WHERE id IN ({placeholders})

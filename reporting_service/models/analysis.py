@@ -5,7 +5,10 @@ Analysis result models.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from .signal_analysis import SignalOutcomeReport
 
 
 class ExitType(Enum):
@@ -248,9 +251,12 @@ class DeviationReport:
     common_issues: List[str] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
 
+    # Signal-to-outcome analysis (optional, populated when available)
+    signal_outcome: Optional["SignalOutcomeReport"] = None
+
     def to_dict(self) -> Dict:
         """Convert to dictionary."""
-        return {
+        result = {
             "generated_at": self.generated_at.isoformat(),
             "period_start": self.period_start.isoformat() if self.period_start else None,
             "period_end": self.period_end.isoformat() if self.period_end else None,
@@ -261,3 +267,6 @@ class DeviationReport:
             "common_issues": self.common_issues,
             "recommendations": self.recommendations,
         }
+        if self.signal_outcome:
+            result["signal_outcome"] = self.signal_outcome.to_dict()
+        return result

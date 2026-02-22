@@ -23,6 +23,7 @@ from ..models.analysis import (
 from ..models.position import Position
 from .exit_classifier import ExitClassifier
 from .rule_evaluator import RuleEvaluator
+from .signal_outcome_analyzer import SignalOutcomeAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -378,6 +379,18 @@ class DeviationAnalyzer:
         # Generate insights
         report.common_issues = self._identify_common_issues(analyses, metrics, positions_by_id)
         report.recommendations = self._generate_recommendations(analyses, metrics)
+
+        # Signal-to-outcome analysis
+        try:
+            signal_analyzer = SignalOutcomeAnalyzer()
+            report.signal_outcome = signal_analyzer.analyze(
+                analyses,
+                positions_by_id,
+                period_start=period_start,
+                period_end=period_end,
+            )
+        except Exception as e:
+            logger.warning(f"Signal outcome analysis failed: {e}")
 
         return report
 

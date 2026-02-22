@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+from .analysis.signal_outcome_analyzer import SignalOutcomeAnalyzer
 from .analyzer import TradeAnalyzer
 from .config import load_settings
 from .reports.generator import ReportGenerator
@@ -198,6 +199,56 @@ class ReportingRunner:
         logger.info(f"Report saved to {output_path}")
         return output_path
 
+    def generate_signal_report(
+        self,
+        output_path: Optional[str] = None,
+        format: str = "json",
+        since_days: Optional[int] = None,
+    ) -> str:
+        """
+        Generate a signal-to-outcome analysis report.
+
+        Args:
+            output_path: Where to save the report
+            format: Output format (json, markdown)
+            since_days: Analyze last N days
+
+        Returns:
+            Path to generated report
+        """
+        since = None
+        if since_days:
+            since = datetime.utcnow() - timedelta(days=since_days)
+
+        # Get all analyzed positions with their analyses
+        report = self.analyzer.generate_report(period_start=since)
+
+        # Extract signal outcome section
+        if report.signal_outcome is None:
+            logger.warning("Signal outcome analysis not available in report")
+
+        if output_path is None:
+            output_dir = Path(self.settings.report_output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = str(
+                output_dir / f"signal_outcome_report_{timestamp}.{format}"
+            )
+
+        if format == "json":
+            data = report.signal_outcome.to_dict() if report.signal_outcome else {}
+            with open(output_path, "w") as f:
+                json.dump(data, f, indent=2, default=str)
+        elif format == "markdown":
+            content = self.report_generator.to_markdown(report)
+            with open(output_path, "w") as f:
+                f.write(content)
+        else:
+            raise ValueError(f"Unsupported format: {format}")
+
+        logger.info(f"Signal outcome report saved to {output_path}")
+        return output_path
+
     def show_stats(self) -> None:
         """Display analysis statistics."""
         stats = self.analyzer.get_stats()
@@ -312,6 +363,28 @@ def main():
         help="Report on last N days",
     )
 
+    # Signal report command
+    signal_parser = subparsers.add_parser(
+        "signal-report", help="Generate signal-to-outcome analysis report"
+    )
+    signal_parser.add_argument(
+        "--output",
+        "-o",
+        help="Output file path",
+    )
+    signal_parser.add_argument(
+        "--format",
+        "-f",
+        choices=["json", "markdown"],
+        default="json",
+        help="Output format",
+    )
+    signal_parser.add_argument(
+        "--since-days",
+        type=int,
+        help="Analyze last N days",
+    )
+
     # Stats command
     subparsers.add_parser("stats", help="Show analysis statistics")
 
@@ -364,6 +437,14 @@ def main():
                 since_days=args.since_days,
             )
             print(f"Report saved to: {path}")
+
+        elif args.command == "signal-report":
+            path = runner.generate_signal_report(
+                output_path=args.output,
+                format=args.format,
+                since_days=args.since_days,
+            )
+            print(f"Signal outcome report saved to: {path}")
 
         elif args.command == "stats":
             runner.show_stats()

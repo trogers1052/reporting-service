@@ -2,6 +2,7 @@
 Position and trade models matching trading-journal schema.
 """
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -109,9 +110,26 @@ class Position:
                 else None
             ),
             exit_type=row.get("exit_type"),
+            risk_metrics_at_entry=cls._parse_risk_metrics(
+                row.get("risk_metrics_at_entry")
+            ),
             analyzed_at=row.get("analyzed_at"),
             created_at=row.get("created_at"),
         )
+
+    @staticmethod
+    def _parse_risk_metrics(raw) -> Optional[Dict]:
+        """Parse risk_metrics_at_entry from DB (JSONB comes as dict or str)."""
+        if raw is None:
+            return None
+        if isinstance(raw, dict):
+            return raw
+        if isinstance(raw, str):
+            try:
+                return json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return None
 
     @property
     def is_winner(self) -> bool:

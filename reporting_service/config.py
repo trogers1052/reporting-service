@@ -75,6 +75,9 @@ class ReportingSettings(BaseSettings):
         alias="RISK_ENGINE_CONFIG_PATH",
     )
 
+    # Stock-service URL (for feedback data)
+    stock_service_url: str = Field(default="http://stock-service:8081")
+
     # Output settings
     report_output_dir: str = Field(default="./reports")
 
