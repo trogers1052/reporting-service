@@ -5,11 +5,13 @@ Main entry point for running the reporting service.
 """
 
 import argparse
+import http.server
 import json
 import logging
 import os
 import signal
 import sys
+import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -21,6 +23,29 @@ from .config import load_settings
 from .reports.generator import ReportGenerator
 
 logger = logging.getLogger(__name__)
+
+
+def _start_health_server():
+    """Start a simple health check endpoint for Docker."""
+    port = int(os.environ.get("HEALTH_PORT", "8080"))
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/health":
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"ok")
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, format, *args):
+            pass  # suppress access logs
+
+    server = http.server.HTTPServer(("", port), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logger.info(f"Health endpoint: http://localhost:{port}/health")
 
 
 class ReportingRunner:
@@ -128,8 +153,12 @@ class ReportingRunner:
             f"Starting daemon mode - analyzing every {interval_seconds} seconds"
         )
 
+        cycle_num = 0
         while self._running:
             try:
+                cycle_num += 1
+                cycle_start = time.monotonic()
+
                 if not self.analyzer.journal_repo._ensure_connected():
                     logger.error("Failed to reconnect to journal database")
                     time.sleep(30)
@@ -139,10 +168,16 @@ class ReportingRunner:
                 count = self._run_once(limit=limit, reanalyze_all=False)
                 total_analyzed += count
 
+                cycle_duration = time.monotonic() - cycle_start
                 if count > 0:
-                    logger.info(f"Analyzed {count} new positions")
+                    logger.info(
+                        f"Daemon cycle #{cycle_num}: analyzed {count} positions "
+                        f"in {cycle_duration:.1f}s (total: {total_analyzed})"
+                    )
                 else:
-                    logger.debug("No new positions to analyze")
+                    logger.debug(
+                        f"Daemon cycle #{cycle_num}: no new positions ({cycle_duration:.1f}s)"
+                    )
 
                 # Sleep in small intervals to respond to signals
                 for _ in range(interval_seconds):
@@ -394,7 +429,11 @@ def main():
     logging.basicConfig(
         level=getattr(logging, args.log_level),
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
+
+    # Start health endpoint for Docker healthchecks
+    _start_health_server()
 
     if not args.command:
         parser.print_help()
