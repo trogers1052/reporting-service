@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from .analysis.signal_outcome_analyzer import SignalOutcomeAnalyzer
+from .analysis.signal_price_tracker import SignalPriceTracker
 from .analyzer import TradeAnalyzer
 from .config import load_settings
 from .reports.generator import ReportGenerator
@@ -62,6 +63,7 @@ class ReportingRunner:
         self.settings = load_settings(config_path)
         self.analyzer = TradeAnalyzer(self.settings)
         self.report_generator: Optional[ReportGenerator] = None
+        self.price_tracker: Optional[SignalPriceTracker] = None
         self._shutdown_called = False
 
     def initialize(self) -> bool:
@@ -73,6 +75,21 @@ class ReportingRunner:
             self.settings,
             self.analyzer,
         )
+
+        # Initialize signal price tracker for outcome classification
+        db = self.settings.database
+        self.price_tracker = SignalPriceTracker(
+            stock_service_url=self.settings.stock_service_url,
+            timescale_host=db.timescale_host,
+            timescale_port=db.timescale_port,
+            timescale_db=db.timescale_db,
+            timescale_user=db.timescale_user,
+            timescale_password=db.timescale_password,
+        )
+        if not self.price_tracker.connect():
+            logger.warning("Signal price tracker failed to connect - outcome tracking disabled")
+            self.price_tracker = None
+
         return True
 
     def run_analysis(
@@ -167,6 +184,15 @@ class ReportingRunner:
 
                 count = self._run_once(limit=limit, reanalyze_all=False)
                 total_analyzed += count
+
+                # Check signal outcomes against price data
+                if self.price_tracker:
+                    try:
+                        resolved = self.price_tracker.run()
+                        if resolved > 0:
+                            logger.info(f"Signal outcomes resolved: {resolved}")
+                    except Exception as e:
+                        logger.error(f"Signal price tracker error: {e}")
 
                 cycle_duration = time.monotonic() - cycle_start
                 if count > 0:
@@ -325,6 +351,8 @@ class ReportingRunner:
         if not self._shutdown_called:
             self._shutdown_called = True
             self.analyzer.shutdown()
+            if self.price_tracker:
+                self.price_tracker.close()
 
 
 def main():
@@ -423,6 +451,12 @@ def main():
     # Stats command
     subparsers.add_parser("stats", help="Show analysis statistics")
 
+    # Track outcomes command
+    subparsers.add_parser(
+        "track-outcomes",
+        help="Check signal outcomes against price data",
+    )
+
     args = parser.parse_args()
 
     # Setup logging
@@ -487,6 +521,13 @@ def main():
 
         elif args.command == "stats":
             runner.show_stats()
+
+        elif args.command == "track-outcomes":
+            if runner.price_tracker:
+                resolved = runner.price_tracker.run()
+                print(f"Resolved {resolved} signal outcomes")
+            else:
+                print("Signal price tracker not available (TimescaleDB connection failed)")
 
     finally:
         runner.shutdown()
