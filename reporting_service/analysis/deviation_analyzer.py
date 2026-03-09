@@ -13,6 +13,7 @@ from ..config import ReportingSettings
 from ..data.journal_repository import JournalRepository
 from ..data.market_data import MarketDataLoader
 from ..data.rules_client import RulesClient
+from ..metrics import EXIT_CLASSIFICATIONS, RULE_EVALUATIONS
 from ..models.analysis import (
     ComplianceLevel,
     ComplianceMetrics,
@@ -134,6 +135,11 @@ class DeviationAnalyzer:
                 position.entry_date,
             )
 
+            # Track rule evaluations
+            for rule_eval in evaluations:
+                if rule_eval.triggered:
+                    RULE_EVALUATIONS.labels(rule_name=rule_eval.rule_name).inc()
+
             analysis.entry_rules_evaluated = evaluations
             analysis.entry_signal_type = signal_type
             analysis.entry_signal_confidence = confidence
@@ -187,6 +193,7 @@ class DeviationAnalyzer:
             )
 
         analysis.exit_type = self.exit_classifier.classify(position, exit_indicators)
+        EXIT_CLASSIFICATIONS.labels(exit_type=analysis.exit_type.value).inc()
 
         # Calculate overall compliance score
         analysis.calculate_compliance_score()

@@ -14,6 +14,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from ..config import ReportingSettings
+from ..metrics import DB_ERRORS
 from ..models.position import JournalEntry, Position, Trade
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class JournalRepository:
             logger.info(f"Connected to journal database at {db.journal_host}")
             return True
         except psycopg2.Error as e:
+            DB_ERRORS.inc()
             logger.error(f"Failed to connect to journal database: {e}")
             return False
 
@@ -101,6 +103,7 @@ class JournalRepository:
             self._conn.commit()
             logger.info("Analysis columns ensured in journal_positions")
         except psycopg2.Error as e:
+            DB_ERRORS.inc()
             logger.error(f"Error adding analysis columns: {e}")
             try:
                 self._conn.rollback()
@@ -163,9 +166,11 @@ class JournalRepository:
             return [Position.from_row(dict(row)) for row in rows]
 
         except psycopg2.OperationalError as e:
+            DB_ERRORS.inc()
             logger.error(f"Database connection error fetching positions: {e}")
             raise
         except psycopg2.Error as e:
+            DB_ERRORS.inc()
             logger.error(f"Error fetching positions: {e}")
             return []
 
@@ -196,6 +201,7 @@ class JournalRepository:
             return None
 
         except psycopg2.Error as e:
+            DB_ERRORS.inc()
             logger.error(f"Error fetching position {position_id}: {e}")
             return None
 
@@ -220,6 +226,7 @@ class JournalRepository:
                 rows = cur.fetchall()
             return [Position.from_row(dict(row)) for row in rows]
         except psycopg2.Error as e:
+            DB_ERRORS.inc()
             logger.error(f"Error fetching positions by ids: {e}")
             return []
 
@@ -244,6 +251,7 @@ class JournalRepository:
             return [Trade.from_row(dict(row)) for row in rows]
 
         except psycopg2.Error as e:
+            DB_ERRORS.inc()
             logger.error(f"Error fetching trades for position {position_id}: {e}")
             return []
 
@@ -269,6 +277,7 @@ class JournalRepository:
             return None
 
         except psycopg2.Error as e:
+            DB_ERRORS.inc()
             logger.error(f"Error fetching trade {entry_order_id}: {e}")
             return None
 
@@ -296,6 +305,7 @@ class JournalRepository:
             return None
 
         except psycopg2.Error as e:
+            DB_ERRORS.inc()
             logger.error(f"Error fetching journal entry for {position_id}: {e}")
             return None
 
@@ -363,9 +373,11 @@ class JournalRepository:
             return True
 
         except psycopg2.OperationalError as e:
+            DB_ERRORS.inc()
             logger.error(f"Database connection error updating position {position_id}: {e}")
             raise
         except psycopg2.Error as e:
+            DB_ERRORS.inc()
             logger.error(f"Error updating position {position_id}: {e}")
             try:
                 self._conn.rollback()
@@ -431,5 +443,6 @@ class JournalRepository:
             return stats
 
         except psycopg2.Error as e:
+            DB_ERRORS.inc()
             logger.error(f"Error fetching analysis stats: {e}")
             return {}

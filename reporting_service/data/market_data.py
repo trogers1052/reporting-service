@@ -13,6 +13,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from ..config import ReportingSettings
+from ..metrics import MARKET_DATA_ERRORS
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class MarketDataLoader:
             logger.info(f"Connected to TimescaleDB at {db.timescale_host}")
             return True
         except psycopg2.Error as e:
+            MARKET_DATA_ERRORS.inc()
             logger.error(f"Failed to connect to TimescaleDB: {e}")
             return False
 
@@ -134,6 +136,7 @@ class MarketDataLoader:
                 return indicators if indicators else None
 
         except psycopg2.Error as e:
+            MARKET_DATA_ERRORS.inc()
             logger.debug(f"Indicators table query failed: {e}")
 
         return None
@@ -194,33 +197,40 @@ class MarketDataLoader:
             if len(closes) >= 200:
                 indicators["sma_200"] = sum(closes[:200]) / 200
 
-            # Calculate ATR (14-period)
+            # Calculate ATR (14-period) using Wilder's smoothing.
+            # Data is most-recent-first; compute TRs then reverse to
+            # chronological order for the smoothing pass.
             if len(closes) >= 15:
                 trs = []
-                for i in range(1, 15):
+                for i in range(len(closes) - 1):
                     tr = max(
-                        highs[i - 1] - lows[i - 1],
-                        abs(highs[i - 1] - closes[i]),
-                        abs(lows[i - 1] - closes[i]),
+                        highs[i] - lows[i],
+                        abs(highs[i] - closes[i + 1]),
+                        abs(lows[i] - closes[i + 1]),
                     )
                     trs.append(tr)
-                indicators["atr_14"] = sum(trs) / len(trs)
+                trs.reverse()  # oldest first
+                atr = sum(trs[:14]) / 14  # seed with simple average
+                for tr in trs[14:]:
+                    atr = (atr * 13 + tr) / 14  # Wilder's smoothing
+                indicators["atr_14"] = atr
 
-            # Calculate RSI (14-period)
+            # Calculate RSI (14-period) using Wilder's smoothing.
             if len(closes) >= 15:
-                gains = []
-                losses = []
-                for i in range(14):
-                    change = closes[i] - closes[i + 1]
-                    if change > 0:
-                        gains.append(change)
-                        losses.append(0)
-                    else:
-                        gains.append(0)
-                        losses.append(abs(change))
+                changes = []
+                for i in range(len(closes) - 1):
+                    changes.append(closes[i] - closes[i + 1])
+                changes.reverse()  # oldest first
 
-                avg_gain = sum(gains) / 14
-                avg_loss = sum(losses) / 14
+                gains = [max(c, 0) for c in changes]
+                losses = [abs(min(c, 0)) for c in changes]
+
+                avg_gain = sum(gains[:14]) / 14  # seed
+                avg_loss = sum(losses[:14]) / 14
+
+                for i in range(14, len(gains)):
+                    avg_gain = (avg_gain * 13 + gains[i]) / 14
+                    avg_loss = (avg_loss * 13 + losses[i]) / 14
 
                 if avg_loss > 0:
                     rs = avg_gain / avg_loss
@@ -235,6 +245,7 @@ class MarketDataLoader:
             return indicators
 
         except psycopg2.Error as e:
+            MARKET_DATA_ERRORS.inc()
             logger.error(f"Error computing indicators for {symbol}: {e}")
             return None
 
@@ -268,6 +279,7 @@ class MarketDataLoader:
             return None
 
         except psycopg2.Error as e:
+            MARKET_DATA_ERRORS.inc()
             logger.error(f"Error getting price for {symbol} at {timestamp}: {e}")
             return None
 
@@ -310,5 +322,6 @@ class MarketDataLoader:
             return returns[-lookback_days:] if len(returns) > lookback_days else returns
 
         except psycopg2.Error as e:
+            MARKET_DATA_ERRORS.inc()
             logger.error(f"Error getting returns for {symbol}: {e}")
             return None

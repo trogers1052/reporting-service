@@ -47,9 +47,17 @@ class FeedbackEntry:
 class StockServiceClient:
     """Reads feedback data from stock-service REST API."""
 
-    def __init__(self, base_url: str = "http://stock-service:8081"):
+    def __init__(self, base_url: str = "http://stock-service:8081", api_key: str = ""):
         self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
         self._timeout = 10
+
+    @property
+    def _headers(self) -> dict:
+        h: dict = {}
+        if self._api_key:
+            h["X-API-Key"] = self._api_key
+        return h
 
     def get_feedback(
         self,
@@ -65,6 +73,7 @@ class StockServiceClient:
             resp = requests.get(
                 f"{self._base_url}/api/v1/feedback",
                 params=params,
+                headers=self._headers,
                 timeout=self._timeout,
             )
             resp.raise_for_status()
@@ -81,6 +90,7 @@ class StockServiceClient:
         try:
             resp = requests.get(
                 f"{self._base_url}/api/v1/feedback/summary",
+                headers=self._headers,
                 timeout=self._timeout,
             )
             resp.raise_for_status()

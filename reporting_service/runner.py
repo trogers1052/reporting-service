@@ -21,6 +21,12 @@ from .analysis.signal_outcome_analyzer import SignalOutcomeAnalyzer
 from .analysis.signal_price_tracker import SignalPriceTracker
 from .analyzer import TradeAnalyzer
 from .config import load_settings
+from .metrics import (
+    ANALYSIS_CYCLES,
+    POSITIONS_ANALYZED,
+    SIGNAL_OUTCOMES_RESOLVED,
+    start_metrics_server,
+)
 from .reports.generator import ReportGenerator
 
 logger = logging.getLogger(__name__)
@@ -135,6 +141,8 @@ class ReportingRunner:
         else:
             analyses = self.analyzer.analyze_unanalyzed(limit=limit)
 
+        ANALYSIS_CYCLES.inc()
+
         # Log summary
         if analyses:
             avg_compliance = sum(a.rule_compliance_score for a in analyses) / len(
@@ -190,6 +198,7 @@ class ReportingRunner:
                     try:
                         resolved = self.price_tracker.run()
                         if resolved > 0:
+                            SIGNAL_OUTCOMES_RESOLVED.inc(resolved)
                             logger.info(f"Signal outcomes resolved: {resolved}")
                     except Exception as e:
                         logger.error(f"Signal price tracker error: {e}")
@@ -468,6 +477,9 @@ def main():
 
     # Start health endpoint for Docker healthchecks
     _start_health_server()
+
+    # Start Prometheus metrics endpoint
+    start_metrics_server()
 
     if not args.command:
         parser.print_help()

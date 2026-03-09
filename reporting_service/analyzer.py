@@ -5,6 +5,7 @@ Orchestrates the analysis of trades and updates the journal database.
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import List, Optional
 
@@ -12,6 +13,7 @@ from .analysis.deviation_analyzer import DeviationAnalyzer
 from .config import ReportingSettings
 from .data.journal_repository import JournalRepository
 from .data.market_data import MarketDataLoader
+from .metrics import ANALYSIS_DURATION, POSITIONS_ANALYZED
 from .models.analysis import DeviationReport, TradeAnalysis
 from .models.position import Position
 
@@ -91,8 +93,11 @@ class TradeAnalyzer:
         analyses = []
         for position in positions:
             try:
+                start = time.monotonic()
                 analysis = self.deviation_analyzer.analyze_position(position)
+                ANALYSIS_DURATION.observe(time.monotonic() - start)
                 analyses.append(analysis)
+                POSITIONS_ANALYZED.labels(status="success").inc()
 
                 if update_db:
                     self._update_position(position.id, analysis)
@@ -104,6 +109,7 @@ class TradeAnalyzer:
                 )
 
             except Exception as e:
+                POSITIONS_ANALYZED.labels(status="error").inc()
                 logger.error(f"Error analyzing position {position.id}: {e}")
 
         logger.info(f"Analyzed {len(analyses)} positions")
@@ -172,13 +178,17 @@ class TradeAnalyzer:
         analyses = []
         for position in positions:
             try:
+                start = time.monotonic()
                 analysis = self.deviation_analyzer.analyze_position(position)
+                ANALYSIS_DURATION.observe(time.monotonic() - start)
                 analyses.append(analysis)
+                POSITIONS_ANALYZED.labels(status="success").inc()
 
                 if update_db:
                     self._update_position(position.id, analysis)
 
             except Exception as e:
+                POSITIONS_ANALYZED.labels(status="error").inc()
                 logger.error(f"Error analyzing position {position.id}: {e}")
 
         return analyses

@@ -11,6 +11,9 @@ pydantic>=2.0.0
 pydantic-settings>=2.0.0
 PyYAML>=6.0.0
 
+# Metrics
+prometheus_client>=0.17.0
+
 
 # Development & Testing
 pytest>=7.0.0
