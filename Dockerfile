@@ -33,4 +33,7 @@ ENV REPORTING_LOG_LEVEL=INFO
 ENV REPORTING_DAEMON_INTERVAL=300
 
 # Default command - run analysis in daemon mode
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=15s \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"
+
 CMD ["python", "-m", "reporting_service.runner", "analyze", "--daemon"]
