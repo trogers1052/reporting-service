@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user
+RUN adduser --disabled-password --gecos "" appuser
+
 # Copy requirements first for better caching
 COPY requirements.txt .
 
@@ -31,6 +34,9 @@ ENV REPORTING_DATABASE__TIMESCALE_HOST=localhost
 ENV REPORTING_DATABASE__TIMESCALE_PORT=5432
 ENV REPORTING_LOG_LEVEL=INFO
 ENV REPORTING_DAEMON_INTERVAL=300
+
+RUN chown -R appuser:appuser /app
+USER appuser
 
 # Default command - run analysis in daemon mode
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=15s \
