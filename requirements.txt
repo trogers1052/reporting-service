@@ -1,26 +1,22 @@
-# Reporting Service Dependencies
+# Reporting Service Dependencies (pinned to production versions)
 
 # Database
-psycopg2-binary>=2.9.0
+psycopg2-binary==2.9.11
 
 # Cache
-redis>=5.0.0
+redis==7.3.0
+
+# HTTP client
+requests==2.32.5
 
 # Configuration
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-PyYAML>=6.0.0
+pydantic==2.12.5
+pydantic-settings==2.13.1
+PyYAML==6.0.3
 
 # Metrics
-prometheus_client>=0.17.0
-
+prometheus-client==0.24.1
 
 # Development & Testing
-pytest>=7.0.0
+pytest==9.0.2
 pytest-cov>=4.0.0
-
-# Optional: Decision engine integration
-# Install separately: pip install -e ../decision-engine
-
-# Optional: Risk engine integration
-# Install separately: pip install -e ../risk-engine
